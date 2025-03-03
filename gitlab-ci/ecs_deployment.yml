@@ -1,0 +1,40 @@
+stages:
+  - build
+  - push
+  - deploy
+
+variables:
+  IMAGE_NAME: "my-app" # Change to your application name
+  ECR_REPOSITORY: "your_ecr_repository_uri" # Change to your ECR repository URI
+  AWS_REGION: "your-aws-region" # Change to your AWS region
+  ECS_CLUSTER: "your-cluster-name" # Change to your ECS cluster name
+  ECS_SERVICE: "your-service-name" # Change to your ECS service name
+
+before_script:
+  - export TAG=$(date +'%d%m%Y-%H-%M')
+  - export IMAGE_TAG="$ECR_REPOSITORY:$TAG"
+
+build:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - docker build -t $IMAGE_NAME:$TAG .
+    - docker tag $IMAGE_NAME:$TAG $IMAGE_TAG
+  artifacts:
+    paths:
+      - $IMAGE_NAME:$TAG
+
+push:
+  stage: push
+  image: amazon/aws-cli
+  script:
+    - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPOSITORY
+    - docker push $IMAGE_TAG
+
+deploy:
+  stage: deploy
+  image: amazon/aws-cli
+  script:
+    - aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE --force-new-deployment
